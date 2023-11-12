@@ -1,0 +1,439 @@
+
+
+; TETRACTION
+; TETRIS GAME IN ACTION
+; (C) 2020 PAULO GARCIA
+
+DEFINE FIELD_WIDTH="12"
+DEFINE FIELD_HEIGHT="18"          
+DEFINE FIELD_SIZE="216" ;12 COLS 18 rows
+
+; Global variables
+CARD ARRAY tetro_i=[$0F00 $2222 $00F0 $4444],
+           tetro_j=[$44C0 $8E00 $6440 $0E20],
+           tetro_l=[$4460 $0E80 $C440 $2E00],
+           tetro_o=[$CC00 $CC00 $CC00 $CC00],
+           tetro_s=[$06C0 $8C40 $6C00 $4620],
+           tetro_t=[$0E40 $4640 $4E00 $4C40],
+           tetro_z=[$0C60 $4C80 $C600 $2640]
+
+CARD POINTER curTetro
+CARD POINTER nextTetro
+
+CARD score=[0]
+BYTE speed=[200]   ; smaller number, more speed
+
+BYTE ARRAY field(FIELD_SIZE)
+BYTE POINTER pField=field
+
+BYTE ARRAY pieces=[ 0 131 129 128 'L 'O 'S 'T 'Z]
+
+
+BYTE CONSOL=$D01F   ;read console keys
+CHAR KEYB=$02FC  ; KEYBOARD SCAN
+                 ; Z - $17, O - $8
+                 ; P - $0A, L - $0
+
+
+; SCREEN POINTER
+CARD POINTER DLADDR ;DISPLAY LIST ADDR
+BYTE POINTER SCR ; BEGINNING OF SCREEN POINTER
+
+CARD ARRAY xTetroTemp(16)
+                
+; ADD CHAR ON SCREEN
+PROC PUTX(CARD SCR, BYTE X, Y,V)
+  POKE(SCR+(Y*40+X),V) 
+RETURN
+
+PROC CLRSCR()
+  CARD I,J
+  FOR I = 0 to 39
+  DO
+    FOR J = 0 to 23
+    DO
+      PUTX(SCR, I,J, 0)
+    OD
+  OD
+RETURN
+
+; Init playfield
+; 1 borders
+; 0 empty space
+PROC InitField()
+  BYTE x,y
+                        
+  FOR x=0 TO FIELD_WIDTH-1
+  DO
+    FOR y=0 TO FIELD_HEIGHT-1
+    DO
+      IF x=0 or y=FIELD_HEIGHT-1 or x=FIELD_WIDTH-1 THEN
+        field(y*FIELD_WIDTH+x)=1
+      ELSE
+        field(y*FIELD_WIDTH+x)=0
+      FI
+    OD
+  OD
+RETURN                
+
+PROC DrawField(BYTE x1, y1, maxY)
+  CARD X,Y       
+  FOR x=X1 TO X1+FIELD_WIDTH-1
+  DO
+    FOR Y=Y1 TO Y1+maxY
+    DO
+      PUTX(SCR,X,Y+3,pieces(field((y-y1)*FIELD_WIDTH+(x-x1))))
+    OD
+  OD
+RETURN              
+
+; Get the current random Tetro
+PROC getNextTetro()
+      
+  BYTE randTetro
+
+  randTetro=RAND(7)
+  IF randTetro=0 THEN
+    nextTetro=tetro_i
+  ELSEIF randTetro=1 THEN
+    nextTetro=tetro_j
+  ELSEIF randTetro=2 THEN
+    nextTetro=tetro_l
+  ELSEIF randTetro=3 THEN
+    nextTetro=tetro_o
+  ELSEIF randTetro=4 THEN
+    nextTetro=tetro_s
+  ELSEIF randTetro=5 THEN
+    nextTetro=tetro_t
+  ELSEIF randTetro=6 THEN
+    nextTetro=tetro_z
+  FI
+
+RETURN
+
+; f set to 1 will record the tetro in the field - used for the ones not moving
+PROC DrawTetro(CARD POINTER tetro,BYTE x,y, BYTE r, BYTE p, BYTE f)
+    
+  BYTE tx,ty,tt
+
+  tx=0 ty=0
+  FOR tt=0 to 15
+  DO 
+    IF (tetro(tt)>0) THEN
+      PUTX(SCR,tx+X,ty+Y+3,pieces(p))
+      IF (f=1) THEN
+        ;stick tetro in the field()
+        field((ty+Y)*FIELD_WIDTH+(tx+X))=3
+        ;debug DrawField(FIELD_HEIGHT-1)   
+      FI
+    FI
+    tx=tx+1
+    IF tx > 3 THEN         
+      ty=ty+1
+      tx=0  
+    fi
+  OD
+RETURN
+
+; Convert Tetromino hex in binary string
+PROC ExpandTetro(CARD POINTER tetro, CARD POINTER xt, BYTE r)
+    
+  CARD bit
+  BYTE tx
+
+  bit=$8000 
+  tx=0
+  WHILE bit>0 
+  DO
+    IF (tetro(r) & bit)>0 THEN
+      xt(tx)=1
+    ELSE
+      xt(tx)=0
+    FI
+    tx=tx+1
+    bit=bit RSH 1
+  OD
+RETURN
+                
+BYTE FUNC DoesFit(CARD POINTER tetro,BYTE posX, BYTE posY,BYTE r)
+  BYTE px,py
+  BYTE vField
+
+  FOR px=0 TO 3
+  DO
+    FOR py=0 TO 3
+    DO    
+      ; check bounds
+      if (posX+px)>=0 AND (posX+px)<FIELD_WIDTH THEN
+        if (posY+py)>=0 AND (posY+py)<FIELD_HEIGHT THEN
+          ;check collision
+          vField = field((py+posY)*FIELD_WIDTH+(px+posX))
+          if tetro(px+py*4)<>0 AND vField>0 THEN
+           RETURN (0)
+          fi
+
+        fi
+      fi
+    OD
+  OD
+
+RETURN (1) 
+
+PROC ShowScore()
+  POSITION(21,10)
+  PRINTC(score)
+  POSITION(27,22)
+  PRINT(" ")
+RETURN
+
+PROC ShowNextTetro()
+  BYTE I,J
+  FOR I = 12 to 20
+  DO
+    FOR J = 15 to 18
+    DO
+      PUTX(SCR, I,J, 0)
+    OD
+  OD
+
+  DrawTetro(xTetroTemp,17,12, 0, 3, 0)
+
+RETURN
+
+;-------------------------
+; Check complete rows
+;-------------------------
+BYTE FUNC CheckRows(BYTE currentY)
+  BYTE px,py,dy
+  BYTE empty
+  BYTE I
+  CARD POINTER dst,source
+  BYTE rows
+
+  rows = 0
+  FOR py = currentY to FIELD_HEIGHT - 2
+  Do
+    empty=0
+    FOR px = 1 to FIELD_WIDTH - 2
+    DO
+      IF field(py*FIELD_WIDTH+px)<>3 THEN
+        empty=1
+      FI
+    OD
+    if empty = 0 THEN
+      ; move all rows above py one down
+      rows = rows + 1
+      dy = py-1
+      WHILE (dy > 0)
+      DO
+        ; copy lines down to overwrite full row
+        FOR I = 1 to FIELD_WIDTH - 2
+        DO
+          field((dy+1)*FIELD_WIDTH+I) = field((dy)*FIELD_WIDTH+I)
+        OD
+        dy = dy-1
+      OD
+      DrawField(0,0, FIELD_HEIGHT-1)
+    fi    
+  OD
+  ; speed increases every X rows * 10
+  speed = speed - rows * 5
+  IF (speed < 0) THEN
+    speed = 0
+  FI
+  ; score more points for multip[e rows 
+  score = score + rows * 100
+  ShowScore()
+RETURN (1)
+
+; Present intro screen
+PROC IntroScreen()
+  BYTE noInput=[1]
+  BYTE I,J
+  BYTE C
+  
+  GRAPHICS(1+16)  
+  DLADDR=PEEKC(560)+4  
+  SCR=DLADDR^ 
+  CLRSCR()
+  C=0
+  POKE(756,226)
+  FOR J = 0 to 23
+  DO
+    FOR I = 0 to 19
+    DO
+      PUTX(SCR, I,J,C)
+      C=C+1
+    OD
+  OD
+  WHILE noInput=1
+  DO
+    IF KEYB=$2F THEN ; (Q)uit
+      noInput=0
+    FI
+  OD
+  KEYB=$FF
+  CLRSCR();
+RETURN
+
+;-------------------------
+; Program main routine
+;-------------------------
+PROC Main()
+  BYTE gameOver=[100] 
+  BYTE currentX,currentY
+  BYTE r, r1    
+  BYTE debounce
+  BYTE forceDown=[0] 
+  Byte speedCount=[0]
+  BYTE I
+  
+  CARD ARRAY xTetro(16)
+  
+
+  ; Initialize gr0 pointer
+  
+  IntroScreen()
+
+  GRAPHICS(0)        
+  DLADDR=PEEKC(560)+4  
+  SCR=DLADDR^ 
+  CLRSCR()
+
+  POSITION(20,1)
+  Print("Actris!")
+  POSITION(14,2)
+  Print("By PauLowRes - 2023")
+
+  InitField()
+
+  currentX = 6
+  currentY = -2 
+  r=0         
+  debounce=0
+  gameOver=100
+  score = 0
+  ; get first tetro then get next one right after
+  getNextTetro()
+  curTetro = nextTetro
+  getNextTetro()
+
+  
+  POSITION(14,10)
+  PRINT("Score: ")
+  ShowScore()
+
+  POSITION(14,12)
+  PRINT("Next piece: ")
+
+  ; expands results in string
+  ExpandTetro(curTetro,xTetro, r)
+  DrawField(0, 0, FIELD_HEIGHT-1)
+
+  ; draw next tetro on the side
+  ExpandTetro(nextTetro,xTetroTemp, r)
+  ShowNextTetro()
+
+  WHILE gameOver<>1
+  DO
+
+    speedCount=speedCount+1
+    if (speedCount = speed) THEN
+      forceDown=1
+    fi
+                              
+    ; CHECK FOR KEYS
+    if debounce=1 then
+      KEYB=$FF
+      debounce=0
+    fi
+    IF KEYB=$2F THEN ; (Q)uit
+      gameOver=1
+    ELSEIF KEYB=$8 and debounce=0 THEN  ; (O) LEFT
+      IF DoesFit(xTetro, currentX-1,currentY,r) THEN
+        DrawTetro(xTetro,currentX,currentY, r, 0, 0)
+ 
+        currentX=currentX-1                     
+      FI
+      debounce=1
+    ELSEIF KEYB=$A AND debounce=0 THEN  ; (P) RIGHT
+      IF DoesFit(xTetro, currentX+1,currentY,r) THEN
+        DrawTetro(xTetro,currentX,currentY, r, 0, 0)
+        currentX=currentX+1                     
+      FI
+      debounce=1
+    ELSEIF KEYB=0 AND debounce=0 THEN  ; (P) RIGHT
+      IF DoesFit(xTetro, currentX,currentY+1,r) THEN
+        forceDown=1
+      FI
+      debounce=1
+    ELSEIF KEYB=$17 AND debounce=0 THEN ; (Z) ROTATE
+
+      ; save previous r
+      r1 = r
+      r=r+1
+      IF r>3 THEN
+        r=0
+      FI                
+      ExpandTetro(curTetro,xTetroTemp, r)
+      IF DoesFit(xTetroTemp, currentX,currentY,r) THEN
+        
+        DrawTetro(xTetro,currentX,currentY, r, 0, 0)
+        ExpandTetro(curTetro, xTetro, r)
+        debounce=1
+      else    
+        ; restore rotation
+        r = r1 
+      FI
+    FI
+
+    IF forceDown=1 THEN
+
+      IF DoesFit(xTetro, currentX,currentY+1,r) THEN
+        DrawTetro(xTetro,currentX,currentY, r, 0, 0)
+
+        currentY=currentY+1
+      ELSE
+
+        IF currentY = 0 THEN
+          POSITION(8,10)
+          Print("**************************")
+          POSITION(8,11)
+          Print("*   G a m e  O v e r !   *")
+          POSITION(8,12)
+          Print("**************************")
+          RETURN
+        FI
+
+        ; before start a new tetro
+        ; copy old one onto field array
+        DrawTetro(xTetro, currentX,currentY, r, 3, 1)
+
+        ; CHECK Complete rows
+        CheckRows(currentY)
+ 
+        currentX = 5
+        currentY = 0 
+        r=0         
+        debounce=0
+        ;---getCurTetro()
+        curTetro = nextTetro
+        getNextTetro()
+        ; expands results in string
+        ExpandTetro(curTetro,xTetro, r)
+        
+        ExpandTetro(nextTetro,xTetroTemp, r)
+        ShowNextTetro()
+                     
+      FI
+      speedCount=0
+      forceDown=0
+    FI ;forceDown
+    DrawTetro(xTetro, currentX,currentY, r, 3, 0)
+  OD 
+                  
+  
+RETURN
+
+
+
