@@ -2,6 +2,7 @@
 
 Tetris clone made with OSS Action! Language
 
+![Actris!](actris.png)
 
 # Known issues
 
