@@ -2,7 +2,9 @@
 
 ; TETRACTION
 ; TETRIS GAME IN ACTION
-; (C) 2020 PAULO GARCIA
+; (C) 2023 PAULO GARCIA
+
+INCLUDE "D2:SYS.ACT"
 
 DEFINE FIELD_WIDTH="12"
 DEFINE FIELD_HEIGHT="18"          
@@ -180,10 +182,10 @@ BYTE FUNC DoesFit(CARD POINTER tetro,BYTE posX, BYTE posY,BYTE r)
 RETURN (1) 
 
 PROC ShowScore()
-  POSITION(21,10)
+  POSITION(21,7)
   PRINTC(score)
-  POSITION(27,22)
-  PRINT(" ")
+  ; POSITION(27,22)
+  ; PRINT(" ")
 RETURN
 
 PROC ShowNextTetro()
@@ -293,7 +295,7 @@ PROC Main()
 
   ; Initialize gr0 pointer
   
-  IntroScreen()
+  ; IntroScreen()
 
   GRAPHICS(0)        
   DLADDR=PEEKC(560)+4  
@@ -319,12 +321,21 @@ PROC Main()
   getNextTetro()
 
   
-  POSITION(14,10)
+  POSITION(14,7)
   PRINT("Score: ")
   ShowScore()
 
-  POSITION(14,12)
-  PRINT("Next piece: ")
+  POSITION(14,13)
+  PRINT("Next piece:        ")
+
+  POSITION(28,16)
+  PRINT("P - RIGHT")
+  POSITION(28,17)
+  PRINT("O - LEFT")
+  POSITION(28,18)
+  PRINT("L - DOWN")
+  POSITION(28,19)
+  PRINT("Z - ROTATE")
 
   ; expands results in string
   ExpandTetro(curTetro,xTetro, r)
