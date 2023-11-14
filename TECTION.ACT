@@ -1,6 +1,6 @@
 
 
-; TETRACTION
+; TECTION
 ; TETRIS GAME IN ACTION
 ; (C) 2023 PAULO GARCIA
 
@@ -303,7 +303,7 @@ PROC Main()
   CLRSCR()
 
   POSITION(20,1)
-  Print("Actris!")
+  Print("Tection!")
   POSITION(14,2)
   Print("By PauLowRes - 2023")
 
