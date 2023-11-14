@@ -1,8 +1,8 @@
-# Actris!
+# Tection!
 
 Tetris-like game made with OSS Action! Language
 
-![Actris!](actris.png)
+![Tection!](actris.png)
 
 # Known issues
 
