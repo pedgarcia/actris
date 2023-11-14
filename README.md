@@ -2,7 +2,7 @@
 
 Tetris-like game made with OSS Action! Language
 
-![Tection!](actris.png)
+![Tection!](tection.png)
 
 # Known issues
 
